@@ -1,0 +1,3 @@
+Quiero desarrollar un juego multijugador de 4 en línea. 
+Los jugadores podrán conectarse y competir entre ellos. 
+Además, podrán acceder a sus estadísticas de juego, vinculadas a sus perfiles personales.

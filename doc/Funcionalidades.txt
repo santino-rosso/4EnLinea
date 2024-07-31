@@ -1,0 +1,21 @@
+*Cliente
+Funcionalidades:
+--Interfaz de Usuario: Proporciona una interfaz para que los jugadores interactúen con el juego.
+--Conexión con el Servidor: Establece una conexión de socket con el servidor para enviar y recibir datos en tiempo real.
+--Autenticación: Envía credenciales de usuario para autenticarse a través del servidor.
+--Visualización de Estadísticas: Muestra estadísticas del jugador y del juego, que se obtienen del servidor.
+--Manejo de Errores: Gestiona errores de conexión y muestra mensajes adecuados al usuario.
+
+*Servidor
+Funcionalidades:
+--Gestión de Conexiones: Maneja múltiples conexiones de clientes a través de sockets.
+--Autenticación y Autorización: Valida las credenciales del cliente.
+--Lógica del Juego: Controla la lógica del juego, incluyendo el estado del juego, las reglas, y las interacciones entre jugadores.
+--Sincronización de Estado: Sincroniza el estado del juego en tiempo real y envía actualizaciones a los clientes.
+--Persistencia de Datos: Interactúa con la base de datos para almacenar y recuperar datos relacionados con los jugadores.
+--Manejo de Tareas Asíncronas: Utiliza colas para manejar tareas asíncronas, como actualizaciones de estado del juego.
+--Consultas SQL: Realiza consultas SQL para recuperar y actualizar datos según sea necesario.
+
+*Base de Datos
+Funcionalidades:
+--Almacenamiento de Datos: Almacena datos del juego, como perfiles de jugadores y estadísticas.
