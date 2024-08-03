@@ -1,4 +1,4 @@
-from Four_In_Line import CuatroInLine
+from Four_In_Line import CuatroInLine, FullColumn
 import socket
 import threading
 import argparse
@@ -28,7 +28,7 @@ class MainFourInLine:
        cola_partida.put(board_message)
 
 
-   def run(self, colas_partida, eventos):
+   def run(self, colas_partida, eventos, evento_partida):
        while self.running:
                turno = int(self.game.turn)
                    
@@ -47,7 +47,53 @@ class MainFourInLine:
                for x in range(2):
                    eventos[x].set()
 
-               
+               while True:
+                    evento_partida.wait()
+                    col = int(colas_partida[turno].get())-1
+                    evento_partida.clear()
+                    try:
+                        self.game.insert_token(col)
+                        colas_partida[turno].put("Ingresado")
+                        eventos[turno].set()
+                        break
+                    except FullColumn:
+                        colas_partida[turno].put("NoIngresado")
+                        error_FullColumn = f"\n-------Columna llena-------\nIngrese una columna nuevamente\n{os.linesep}"
+                        colas_partida[turno].put(error_FullColumn)
+                        eventos[turno].set()
+
+               if self.game.winner():
+                    self.game.change_turn()
+                       
+                    for x in range(2):
+                        colas_partida[x].put("ganador/empate")
+
+                    for x in range(2):
+                        if x == int(self.game.turn):
+                            colas_partida[x].put(f"-------Ganaste-------\n")
+                        else:
+                            colas_partida[x].put(f"-------Perdiste-------\n")
+                       
+                    for x in range(2):
+                        self.board(colas_partida[x])
+                        eventos[x].set()
+                       
+                    self.running = False
+
+               if self.game.empate():
+                    for x in range(2):
+                        colas_partida[x].put("ganador/empate")
+                    
+                    for x in range(2):
+                        colas_partida[x].put(f"-------Empate-------\n")
+                            
+                    for x in range(2):
+                        self.board(colas_partida[x])
+                        eventos[x].set()
+
+                    self.running = False
+
+
 
 class Servidor:
    def __init__(self, TCP_IP, TCP_Port):
@@ -77,15 +123,33 @@ class Servidor:
                    mensaje = cola_partida.get()
                    client_socket.sendall(mensaje.encode())
 
-                   respuesta = client_socket.recv(1024).decode().strip()
-                   if respuesta.isdigit() and 1 <= int(respuesta) <= 8:  
-                        cola_partida.put(respuesta)
-                        evento_partida.set()
+                   while True:
+                        respuesta = client_socket.recv(1024).decode().strip()
+                        if respuesta.isdigit() and 1 <= int(respuesta) <= 8:  
+                            cola_partida.put(respuesta)
+                            evento_partida.set()
+                            evento.wait()
+                            if cola_partida.get() == "Ingresado":
+                                break
+                            else:
+                                error = cola_partida.get()
+                                client_socket.sendall(error.encode())
+                            evento.clear()
+                        else:
+                            mensaje_error = "Entrada inválida. Por favor ingrese un número entre 1 y 8.\n"
+                            client_socket.sendall(mensaje_error.encode())
     
+
                elif data == "no turno":
                    tablero = cola_partida.get()
                    client_socket.sendall(tablero.encode())
                    
+                   
+               elif data == "ganador/empate":
+                   mensajeGanEmp = cola_partida.get()
+                   client_socket.sendall(mensajeGanEmp.encode())
+                   tablero = cola_partida.get()
+                   client_socket.sendall(tablero.encode())
 
        except socket.error as e:
            print(f"Error de socket: {e}")
@@ -118,6 +182,7 @@ class Servidor:
            contador = 0
            eventos = []
            colas_partida = []
+           evento_partida = threading.Event()
 
            while True:
                client_socket, client_address = self.socket.accept()
@@ -125,7 +190,7 @@ class Servidor:
                evento = threading.Event()
                cola_partida = Queue()
 
-               client_thread = threading.Thread(target=self.managment_client, args=(client_socket, client_address, evento, cola_partida))
+               client_thread = threading.Thread(target=self.managment_client, args=(client_socket, client_address, evento, cola_partida, evento_partida))
                client_thread.start()
 
                eventos.append(evento)
@@ -134,15 +199,19 @@ class Servidor:
 
                if contador % 2 == 0:
                    partida = MainFourInLine()
-                   partida_thread = threading.Thread(target=partida.run, args=(colas_partida, eventos))
+                   partida_thread = threading.Thread(target=partida.run, args=(colas_partida, eventos, evento_partida))
                    partida_thread.start()
 
                    eventos = []
                    colas_partida = []
                    cola_partida = Queue()
+                   evento_partida = threading.Event()
+
 
        except socket.error as e:
            print(f"Error al enlazar el socket: {e}")
+       except ValueError as ve:
+           print(f"Error: {ve}")
        finally:
            if self.socket:
                self.socket.close()
