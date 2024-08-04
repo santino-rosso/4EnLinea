@@ -29,6 +29,9 @@ class MainFourInLine:
 
 
    def run(self, colas_partida, eventos, evento_partida):
+       for x in range(2):
+           colas_partida[x].put(evento_partida)
+        
        while self.running:
                turno = int(self.game.turn)
                    
@@ -92,7 +95,7 @@ class MainFourInLine:
                         eventos[x].set()
 
                     self.running = False
-
+            
 
 
 class Servidor:
@@ -100,22 +103,85 @@ class Servidor:
        self.TCP_IP = TCP_IP
        self.TCP_Port = TCP_Port
        self.socket = None
+       self.jugadores_espera = Queue()
+       self.usuarios_registrados = {}
 
 
-   def managment_client(self, client_socket, client_address, evento, cola_partida, evento_partida):
+   def managment_partida(self):
+       while True:
+           if self.jugadores_espera.qsize() >= 2:
+                partida = MainFourInLine()
+                evento_partida = threading.Event()
+                colas_partida = []
+                eventos = []
+                
+                for x in range(2):
+                    jugador = self.jugadores_espera.get()
+                    colas_partida.append(jugador[0])
+                    eventos.append(jugador[1])
+
+                partida_thread = threading.Thread(target=partida.run, args=(colas_partida, eventos, evento_partida))
+                partida_thread.start()
+   
+   def autenticar_jugador(self, client_socket):
+        client_socket.sendall("1. Iniciar sesión\n2. Registrarse\nElija una opción: ".encode())
+        opcion = client_socket.recv(1024).decode().strip()
+
+        if opcion == "1":
+            client_socket.sendall("Ingrese su usuario: ".encode())
+            usuario = client_socket.recv(1024).decode().strip()
+            client_socket.sendall("Ingrese su contraseña: ".encode())
+            contrasena = client_socket.recv(1024).decode().strip()
+
+            if usuario in self.usuarios_registrados and self.usuarios_registrados[usuario] == contrasena:
+                client_socket.sendall("Inicio de sesión exitoso!\n".encode())
+                return usuario
+            else:
+                client_socket.sendall("Usuario o contraseña incorrectos.\n".encode())
+                return self.autenticar_jugador(client_socket)
+
+        elif opcion == "2":
+            client_socket.sendall("Ingrese un nuevo usuario: ".encode())
+            nuevo_usuario = client_socket.recv(1024).decode().strip()
+            client_socket.sendall("Ingrese una nueva contraseña: ".encode())
+            nueva_contrasena = client_socket.recv(1024).decode().strip()
+
+            if nuevo_usuario in self.usuarios_registrados:
+                client_socket.sendall("El usuario ya existe. Intente nuevamente.\n".encode())
+                return self.autenticar_jugador(client_socket)
+            else:
+                self.usuarios_registrados[nuevo_usuario] = nueva_contrasena
+                client_socket.sendall("Registro exitoso!\n".encode())
+                return nuevo_usuario
+        else:
+            client_socket.sendall("Opción no válida. Intente nuevamente.\n".encode())
+            return self.autenticar_jugador(client_socket)
+
+
+   def managment_client(self, client_socket, client_address, evento, cola_partida, verificado):
        print(f"Conexión aceptada de {client_address}")
 
        try:
+           if verificado == False:
+                usuario = self.autenticar_jugador(client_socket)
+                verificado = True
+           
+           datos = [cola_partida,evento]
+           self.jugadores_espera.put(datos)
+
            mensaje = "Bienvenido al 4 en línea\n"
            client_socket.sendall(mensaje.encode())
           
-           while True:
+           evento_partida = cola_partida.get()
+
+           jugando = True
+          
+           while jugando:
                evento.wait()
                
                data = cola_partida.get()
 
                evento.clear()
-
                if data == "turno":
                    tablero = cola_partida.get()
                    client_socket.sendall(tablero.encode())
@@ -150,6 +216,22 @@ class Servidor:
                    client_socket.sendall(mensajeGanEmp.encode())
                    tablero = cola_partida.get()
                    client_socket.sendall(tablero.encode())
+                   mensaje = "Queres voler a jugar?\n 1 --> Si\n 2 --> No"
+                   client_socket.sendall(mensaje.encode())
+                   while True:
+                        respuesta = client_socket.recv(1024).decode().strip()
+                        if respuesta.isdigit() and 1 == int(respuesta):  
+                            self.managment_client(client_socket, client_address, evento, cola_partida, verificado)
+            
+                        elif respuesta.isdigit() and 2 == int(respuesta):
+                            mensaje_despedida = "Chau.\n"
+                            client_socket.sendall(mensaje_despedida.encode())
+                            jugando = False
+                            break
+                        else:
+                            mensaje_error = "Entrada inválida. Por favor ingrese un número entre 1 y 2.\n"
+                            client_socket.sendall(mensaje_error.encode())
+
 
        except socket.error as e:
            print(f"Error de socket: {e}")
@@ -179,34 +261,18 @@ class Servidor:
 
            print(f"Servidor iniciado en {addr}")
 
-           contador = 0
-           eventos = []
-           colas_partida = []
-           evento_partida = threading.Event()
+           administracion_partidas_thread = threading.Thread(target=self.managment_partida)
+           administracion_partidas_thread.start()
 
            while True:
                client_socket, client_address = self.socket.accept()
 
                evento = threading.Event()
                cola_partida = Queue()
+               verificado = False
 
-               client_thread = threading.Thread(target=self.managment_client, args=(client_socket, client_address, evento, cola_partida, evento_partida))
+               client_thread = threading.Thread(target=self.managment_client, args=(client_socket, client_address, evento, cola_partida, verificado))
                client_thread.start()
-
-               eventos.append(evento)
-               colas_partida.append(cola_partida)
-               contador += 1
-
-               if contador % 2 == 0:
-                   partida = MainFourInLine()
-                   partida_thread = threading.Thread(target=partida.run, args=(colas_partida, eventos, evento_partida))
-                   partida_thread.start()
-
-                   eventos = []
-                   colas_partida = []
-                   cola_partida = Queue()
-                   evento_partida = threading.Event()
-
 
        except socket.error as e:
            print(f"Error al enlazar el socket: {e}")
@@ -226,7 +292,7 @@ if __name__ == '__main__':
 
    port = args.port
 
-   servidor = Servidor("::", 1234)  
+   servidor = Servidor("::", port)  
    servidor.start_server()
 
 
