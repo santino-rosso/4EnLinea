@@ -1,4 +1,5 @@
 from Four_In_Line import CuatroInLine, FullColumn
+from Data_Base import Session,Usuario,HashPassword
 import socket
 import threading
 import argparse
@@ -104,7 +105,7 @@ class Servidor:
        self.TCP_Port = TCP_Port
        self.socket = None
        self.jugadores_espera = Queue()
-       self.usuarios_registrados = {}
+       self.session = Session()
 
 
    def managment_partida(self):
@@ -129,41 +130,47 @@ class Servidor:
 
         if opcion == "1":
             client_socket.sendall("Ingrese su usuario: ".encode())
-            usuario = client_socket.recv(1024).decode().strip()
+            usuario_nombre = client_socket.recv(1024).decode().strip()
             client_socket.sendall("Ingrese su contraseña: ".encode())
             contrasena = client_socket.recv(1024).decode().strip()
 
-            if usuario in self.usuarios_registrados and self.usuarios_registrados[usuario] == contrasena:
+            usuario = self.session.query(Usuario).filter_by(username=usuario_nombre).first()
+
+            if usuario and HashPassword.verify_password(usuario.password_hash, contrasena):
                 client_socket.sendall("Inicio de sesión exitoso!\n".encode())
-                return usuario
+                return usuario_nombre
             else:
                 client_socket.sendall("Usuario o contraseña incorrectos.\n".encode())
                 return self.autenticar_jugador(client_socket)
 
         elif opcion == "2":
             client_socket.sendall("Ingrese un nuevo usuario: ".encode())
-            nuevo_usuario = client_socket.recv(1024).decode().strip()
+            nuevo_usuario_nombre = client_socket.recv(1024).decode().strip()
             client_socket.sendall("Ingrese una nueva contraseña: ".encode())
             nueva_contrasena = client_socket.recv(1024).decode().strip()
+            
+            usuario_existente = self.session.query(Usuario).filter_by(username=nuevo_usuario_nombre).first()
 
-            if nuevo_usuario in self.usuarios_registrados:
+            if usuario_existente:
                 client_socket.sendall("El usuario ya existe. Intente nuevamente.\n".encode())
                 return self.autenticar_jugador(client_socket)
             else:
-                self.usuarios_registrados[nuevo_usuario] = nueva_contrasena
+                hash = HashPassword.hash_password(nueva_contrasena)
+                nuevo_usuario = Usuario(username=nuevo_usuario_nombre, password_hash=hash)
+                self.session.add(nuevo_usuario)
+                self.session.commit()
                 client_socket.sendall("Registro exitoso!\n".encode())
-                return nuevo_usuario
+                return nuevo_usuario_nombre
         else:
             client_socket.sendall("Opción no válida. Intente nuevamente.\n".encode())
             return self.autenticar_jugador(client_socket)
 
 
-   def managment_client(self, client_socket, client_address, evento, cola_partida, verificado):
+   def managment_client(self, client_socket, client_address, evento, cola_partida, verificado, usuario_nombre):
        print(f"Conexión aceptada de {client_address}")
-
        try:
            if verificado == False:
-                usuario = self.autenticar_jugador(client_socket)
+                usuario_nombre = self.autenticar_jugador(client_socket)
                 verificado = True
            
            datos = [cola_partida,evento]
@@ -213,6 +220,16 @@ class Servidor:
                    
                elif data == "ganador/empate":
                    mensajeGanEmp = cola_partida.get()
+                   usuario = self.session.query(Usuario).filter_by(username=usuario_nombre).first()
+                   if usuario:
+                        if mensajeGanEmp.strip() == "-------Ganaste-------":
+                            usuario.partidas_ganadas += 1
+                        elif mensajeGanEmp.strip() == "-------Perdiste-------":
+                            usuario.partidas_perdidas += 1
+                        elif mensajeGanEmp.strip() == "-------Empate-------":
+                            usuario.partidas_empatadas += 1 
+                   else:
+                        print("Usuario no encontrado.")
                    client_socket.sendall(mensajeGanEmp.encode())
                    tablero = cola_partida.get()
                    client_socket.sendall(tablero.encode())
@@ -221,8 +238,7 @@ class Servidor:
                    while True:
                         respuesta = client_socket.recv(1024).decode().strip()
                         if respuesta.isdigit() and 1 == int(respuesta):  
-                            self.managment_client(client_socket, client_address, evento, cola_partida, verificado)
-            
+                            self.managment_client(client_socket, client_address, evento, cola_partida, verificado, usuario_nombre)
                         elif respuesta.isdigit() and 2 == int(respuesta):
                             mensaje_despedida = "Chau.\n"
                             client_socket.sendall(mensaje_despedida.encode())
@@ -271,7 +287,7 @@ class Servidor:
                cola_partida = Queue()
                verificado = False
 
-               client_thread = threading.Thread(target=self.managment_client, args=(client_socket, client_address, evento, cola_partida, verificado))
+               client_thread = threading.Thread(target=self.managment_client, args=(client_socket, client_address, evento, cola_partida, verificado,None))
                client_thread.start()
 
        except socket.error as e:
@@ -281,6 +297,14 @@ class Servidor:
        finally:
            if self.socket:
                self.socket.close()
+           try:
+                self.session.commit()
+                print("Datos actualizados y commit realizado.")
+           except Exception as e:
+                print(f"Error al hacer commit: {e}")
+                self.session.rollback()
+           self.session.close()
+
 
 
 
