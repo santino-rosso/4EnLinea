@@ -3,7 +3,6 @@ from Data_Base import Session,Usuario,HashPassword
 import socket
 import threading
 import argparse
-import os
 from queue import Queue
 
 
@@ -62,7 +61,7 @@ class MainFourInLine:
                         break
                     except FullColumn:
                         colas_partida[turno].put("NoIngresado")
-                        error_FullColumn = f"\n-------Columna llena-------\nIngrese una columna nuevamente\n{os.linesep}"
+                        error_FullColumn = "\n-------Columna llena-------\nIngrese una columna nuevamente\n"
                         colas_partida[turno].put(error_FullColumn)
                         eventos[turno].set()
 
@@ -74,9 +73,9 @@ class MainFourInLine:
 
                     for x in range(2):
                         if x == int(self.game.turn):
-                            colas_partida[x].put(f"-------Ganaste-------\n")
+                            colas_partida[x].put("-------Ganaste-------\n")
                         else:
-                            colas_partida[x].put(f"-------Perdiste-------\n")
+                            colas_partida[x].put("-------Perdiste-------\n")
                        
                     for x in range(2):
                         self.board(colas_partida[x])
@@ -89,7 +88,7 @@ class MainFourInLine:
                         colas_partida[x].put("ganador/empate")
                     
                     for x in range(2):
-                        colas_partida[x].put(f"-------Empate-------\n")
+                        colas_partida[x].put("-------Empate-------\n")
                             
                     for x in range(2):
                         self.board(colas_partida[x])
@@ -105,7 +104,6 @@ class Servidor:
        self.TCP_Port = TCP_Port
        self.socket = None
        self.jugadores_espera = Queue()
-       self.session = Session()
 
 
    def managment_partida(self):
@@ -127,14 +125,13 @@ class Servidor:
    def autenticar_jugador(self, client_socket):
         client_socket.sendall("1. Iniciar sesión\n2. Registrarse\nElija una opción: ".encode())
         opcion = client_socket.recv(1024).decode().strip()
-
+        session = Session()
         if opcion == "1":
             client_socket.sendall("Ingrese su usuario: ".encode())
             usuario_nombre = client_socket.recv(1024).decode().strip()
             client_socket.sendall("Ingrese su contraseña: ".encode())
             contrasena = client_socket.recv(1024).decode().strip()
-
-            usuario = self.session.query(Usuario).filter_by(username=usuario_nombre).first()
+            usuario = session.query(Usuario).filter_by(username=usuario_nombre).first()
 
             if usuario and HashPassword.verify_password(usuario.password_hash, contrasena):
                 client_socket.sendall("Inicio de sesión exitoso!\n".encode())
@@ -149,7 +146,7 @@ class Servidor:
             client_socket.sendall("Ingrese una nueva contraseña: ".encode())
             nueva_contrasena = client_socket.recv(1024).decode().strip()
             
-            usuario_existente = self.session.query(Usuario).filter_by(username=nuevo_usuario_nombre).first()
+            usuario_existente = session.query(Usuario).filter_by(username=nuevo_usuario_nombre).first()
 
             if usuario_existente:
                 client_socket.sendall("El usuario ya existe. Intente nuevamente.\n".encode())
@@ -157,8 +154,14 @@ class Servidor:
             else:
                 hash = HashPassword.hash_password(nueva_contrasena)
                 nuevo_usuario = Usuario(username=nuevo_usuario_nombre, password_hash=hash)
-                self.session.add(nuevo_usuario)
-                self.session.commit()
+                session.add(nuevo_usuario)
+                try:
+                    session.commit()
+                except Exception as e:
+                    print(f"Error al hacer commit: {e}")
+                    session.rollback()
+                finally:
+                    session.close()
                 client_socket.sendall("Registro exitoso!\n".encode())
                 return nuevo_usuario_nombre
         else:
@@ -166,88 +169,119 @@ class Servidor:
             return self.autenticar_jugador(client_socket)
 
 
+   def mostrar_estadisticas(self, client_socket, usuario_nombre):
+    session = Session()
+    usuario = session.query(Usuario).filter_by(username=usuario_nombre).first()
+    if usuario:
+        stats = (f"Estadísticas de {usuario_nombre}:\n"f"Partidas ganadas: {usuario.partidas_ganadas}\n"f"Partidas perdidas: {usuario.partidas_perdidas}\n"f"Partidas empatadas: {usuario.partidas_empatadas}\n")
+        client_socket.sendall(stats.encode())
+    else:
+        client_socket.sendall("Usuario no encontrado.\n".encode())
+    session.close()
+
+
    def managment_client(self, client_socket, client_address, evento, cola_partida, verificado, usuario_nombre):
        print(f"Conexión aceptada de {client_address}")
        try:
+           mensaje = "Bienvenido al 4 en línea\n"
+           client_socket.sendall(mensaje.encode())
+
            if verificado == False:
                 usuario_nombre = self.autenticar_jugador(client_socket)
                 verificado = True
-           
-           datos = [cola_partida,evento]
-           self.jugadores_espera.put(datos)
 
-           mensaje = "Bienvenido al 4 en línea\n"
-           client_socket.sendall(mensaje.encode())
-          
-           evento_partida = cola_partida.get()
+           while True:
+                menu = ("1. Jugar\n""2. Ver estadísticas\n""3. Salir\n""Elija una opción: ")
+                client_socket.sendall(menu.encode())
+                opcion = client_socket.recv(1024).decode().strip()
 
-           jugando = True
-          
-           while jugando:
-               evento.wait()
-               
-               data = cola_partida.get()
+                if opcion == "1":
+                    datos = [cola_partida, evento]
+                    self.jugadores_espera.put(datos)
+                    mensaje = "Esperando otro jugador...\n"
+                    client_socket.sendall(mensaje.encode())
+                    evento_partida = cola_partida.get()
+                    jugando = True
+                    while jugando:
+                        evento.wait()
+                        
+                        data = cola_partida.get()
 
-               evento.clear()
-               if data == "turno":
-                   tablero = cola_partida.get()
-                   client_socket.sendall(tablero.encode())
-                   
-                   mensaje = cola_partida.get()
-                   client_socket.sendall(mensaje.encode())
+                        evento.clear()
+                        if data == "turno":
+                            tablero = cola_partida.get()
+                            client_socket.sendall(tablero.encode())
+                            
+                            mensaje = cola_partida.get()
+                            client_socket.sendall(mensaje.encode())
 
-                   while True:
-                        respuesta = client_socket.recv(1024).decode().strip()
-                        if respuesta.isdigit() and 1 <= int(respuesta) <= 8:  
-                            cola_partida.put(respuesta)
-                            evento_partida.set()
-                            evento.wait()
-                            if cola_partida.get() == "Ingresado":
-                                break
+                            while True:
+                                    respuesta = client_socket.recv(1024).decode().strip()
+                                    if respuesta.isdigit() and 1 <= int(respuesta) <= 8:  
+                                        cola_partida.put(respuesta)
+                                        evento_partida.set()
+                                        evento.wait()
+                                        if cola_partida.get() == "Ingresado":
+                                            break
+                                        else:
+                                            error = cola_partida.get()
+                                            client_socket.sendall(error.encode())
+                                        evento.clear()
+                                    else:
+                                        mensaje_error = "Entrada inválida. Por favor ingrese un número entre 1 y 8.\n"
+                                        client_socket.sendall(mensaje_error.encode())
+                
+                        elif data == "no turno":
+                            tablero = cola_partida.get()
+                            client_socket.sendall(tablero.encode())
+                            
+                        elif data == "ganador/empate":
+                            mensajeGanEmp = cola_partida.get()
+                            session = Session()
+                            usuario = session.query(Usuario).filter_by(username=usuario_nombre).first()
+                            if usuario:
+                                    if mensajeGanEmp.strip() == "-------Ganaste-------":
+                                        usuario.partidas_ganadas += 1
+                                    elif mensajeGanEmp.strip() == "-------Perdiste-------":
+                                        usuario.partidas_perdidas += 1
+                                    elif mensajeGanEmp.strip() == "-------Empate-------":
+                                        usuario.partidas_empatadas += 1 
+                                    try:
+                                        session.commit()
+                                    except Exception as e:
+                                        print(f"Error al hacer commit: {e}")
+                                        session.rollback()
+                                    finally:
+                                        session.close()
                             else:
-                                error = cola_partida.get()
-                                client_socket.sendall(error.encode())
-                            evento.clear()
-                        else:
-                            mensaje_error = "Entrada inválida. Por favor ingrese un número entre 1 y 8.\n"
-                            client_socket.sendall(mensaje_error.encode())
-    
+                                    print("Usuario no encontrado.")
+                            client_socket.sendall(mensajeGanEmp.encode())
+                            tablero = cola_partida.get()
+                            client_socket.sendall(tablero.encode())
+                            mensaje = "Queres voler a jugar?\n 1 --> Si\n 2 --> No"
+                            client_socket.sendall(mensaje.encode())
+                            while True:
+                                    respuesta = client_socket.recv(1024).decode().strip()
+                                    if respuesta.isdigit() and 1 == int(respuesta):  
+                                        self.managment_client(client_socket, client_address, evento, cola_partida, verificado, usuario_nombre)
+                                    elif respuesta.isdigit() and 2 == int(respuesta):
+                                        mensaje_despedida = "Saliendo...\n"
+                                        client_socket.sendall(mensaje_despedida.encode())
+                                        jugando = False
+                                        break
+                                    else:
+                                        mensaje_error = "Entrada inválida. Por favor ingrese un número entre 1 y 2.\n"
+                                        client_socket.sendall(mensaje_error.encode())
 
-               elif data == "no turno":
-                   tablero = cola_partida.get()
-                   client_socket.sendall(tablero.encode())
-                   
-                   
-               elif data == "ganador/empate":
-                   mensajeGanEmp = cola_partida.get()
-                   usuario = self.session.query(Usuario).filter_by(username=usuario_nombre).first()
-                   if usuario:
-                        if mensajeGanEmp.strip() == "-------Ganaste-------":
-                            usuario.partidas_ganadas += 1
-                        elif mensajeGanEmp.strip() == "-------Perdiste-------":
-                            usuario.partidas_perdidas += 1
-                        elif mensajeGanEmp.strip() == "-------Empate-------":
-                            usuario.partidas_empatadas += 1 
-                   else:
-                        print("Usuario no encontrado.")
-                   client_socket.sendall(mensajeGanEmp.encode())
-                   tablero = cola_partida.get()
-                   client_socket.sendall(tablero.encode())
-                   mensaje = "Queres voler a jugar?\n 1 --> Si\n 2 --> No"
-                   client_socket.sendall(mensaje.encode())
-                   while True:
-                        respuesta = client_socket.recv(1024).decode().strip()
-                        if respuesta.isdigit() and 1 == int(respuesta):  
-                            self.managment_client(client_socket, client_address, evento, cola_partida, verificado, usuario_nombre)
-                        elif respuesta.isdigit() and 2 == int(respuesta):
-                            mensaje_despedida = "Chau.\n"
-                            client_socket.sendall(mensaje_despedida.encode())
-                            jugando = False
-                            break
-                        else:
-                            mensaje_error = "Entrada inválida. Por favor ingrese un número entre 1 y 2.\n"
-                            client_socket.sendall(mensaje_error.encode())
+                elif opcion == "2":
+                    self.mostrar_estadisticas(client_socket, usuario_nombre)
 
+                elif opcion == "3":
+                    client_socket.sendall("Desconectando...\n".encode())
+                    break
+
+                else:
+                    client_socket.sendall("Opción no válida. Intente nuevamente.\n".encode())
 
        except socket.error as e:
            print(f"Error de socket: {e}")
@@ -297,13 +331,6 @@ class Servidor:
        finally:
            if self.socket:
                self.socket.close()
-           try:
-                self.session.commit()
-                print("Datos actualizados y commit realizado.")
-           except Exception as e:
-                print(f"Error al hacer commit: {e}")
-                self.session.rollback()
-           self.session.close()
 
 
 
