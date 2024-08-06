@@ -9,8 +9,6 @@ engine = create_engine('sqlite:///FourInLine.db')
 # Definición de la base para los modelos
 Base = declarative_base()
 
-# Definición de la clase Usuario (que incluye las columnas y restricciones)
-
 class Usuario(Base):
     __tablename__ = 'usuarios'
     

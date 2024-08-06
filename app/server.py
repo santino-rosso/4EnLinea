@@ -79,7 +79,6 @@ class MainFourInLine:
                        
                     for x in range(2):
                         self.board(colas_partida[x])
-                        eventos[x].set()
                        
                     self.running = False
 
@@ -92,7 +91,6 @@ class MainFourInLine:
                             
                     for x in range(2):
                         self.board(colas_partida[x])
-                        eventos[x].set()
 
                     self.running = False
             
@@ -258,20 +256,9 @@ class Servidor:
                             client_socket.sendall(mensajeGanEmp.encode())
                             tablero = cola_partida.get()
                             client_socket.sendall(tablero.encode())
-                            mensaje = "Queres voler a jugar?\n 1 --> Si\n 2 --> No"
+                            mensaje = "Redirigiendo al inicio...\n"
                             client_socket.sendall(mensaje.encode())
-                            while True:
-                                    respuesta = client_socket.recv(1024).decode().strip()
-                                    if respuesta.isdigit() and 1 == int(respuesta):  
-                                        self.managment_client(client_socket, client_address, evento, cola_partida, verificado, usuario_nombre)
-                                    elif respuesta.isdigit() and 2 == int(respuesta):
-                                        mensaje_despedida = "Saliendo...\n"
-                                        client_socket.sendall(mensaje_despedida.encode())
-                                        jugando = False
-                                        break
-                                    else:
-                                        mensaje_error = "Entrada inválida. Por favor ingrese un número entre 1 y 2.\n"
-                                        client_socket.sendall(mensaje_error.encode())
+                            jugando = False
 
                 elif opcion == "2":
                     self.mostrar_estadisticas(client_socket, usuario_nombre)
