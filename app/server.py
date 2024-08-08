@@ -79,7 +79,9 @@ class MainFourInLine:
                        
                     for x in range(2):
                         self.board(colas_partida[x])
-                       
+                        if x != turno:
+                            eventos[x].set()
+
                     self.running = False
 
                if self.game.empate():
@@ -93,7 +95,7 @@ class MainFourInLine:
                         self.board(colas_partida[x])
 
                     self.running = False
-            
+
 
 
 class Servidor:
@@ -330,7 +332,7 @@ if __name__ == '__main__':
 
    port = args.port
 
-   servidor = Servidor("::", port)  
+   servidor = Servidor("::", 12345)  
    servidor.start_server()
 
 
