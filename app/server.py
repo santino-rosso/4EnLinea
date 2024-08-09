@@ -44,7 +44,7 @@ class MainFourInLine:
                for x in range(2):
                    self.board(colas_partida[x])
 
-               turno_message = f"Turno del jugador {turno} --> En qué columna quieres insertar la ficha: "
+               turno_message = f"*Turno del jugador {turno} --> En qué columna quieres insertar la ficha: "
                colas_partida[turno].put(turno_message)
 
                for x in range(2):
@@ -61,7 +61,7 @@ class MainFourInLine:
                         break
                     except FullColumn:
                         colas_partida[turno].put("NoIngresado")
-                        error_FullColumn = "\n-------Columna llena-------\nIngrese una columna nuevamente\n"
+                        error_FullColumn = "\n-------Columna llena-------\n*Ingrese una columna nuevamente\n"
                         colas_partida[turno].put(error_FullColumn)
                         eventos[turno].set()
 
@@ -123,13 +123,13 @@ class Servidor:
                 partida_thread.start()
    
    def autenticar_jugador(self, client_socket):
-        client_socket.sendall("1. Iniciar sesión\n2. Registrarse\nElija una opción: ".encode())
+        client_socket.sendall("*1. Iniciar sesión\n*2. Registrarse\nElija una opción: ".encode())
         opcion = client_socket.recv(1024).decode().strip()
         session = Session()
         if opcion == "1":
-            client_socket.sendall("Ingrese su usuario: ".encode())
+            client_socket.sendall("*Ingrese su usuario: ".encode())
             usuario_nombre = client_socket.recv(1024).decode().strip()
-            client_socket.sendall("Ingrese su contraseña: ".encode())
+            client_socket.sendall("*Ingrese su contraseña: ".encode())
             contrasena = client_socket.recv(1024).decode().strip()
             usuario = session.query(Usuario).filter_by(username=usuario_nombre).first()
 
@@ -141,9 +141,9 @@ class Servidor:
                 return self.autenticar_jugador(client_socket)
 
         elif opcion == "2":
-            client_socket.sendall("Ingrese un nuevo usuario: ".encode())
+            client_socket.sendall("*Ingrese un nuevo usuario: ".encode())
             nuevo_usuario_nombre = client_socket.recv(1024).decode().strip()
-            client_socket.sendall("Ingrese una nueva contraseña: ".encode())
+            client_socket.sendall("*Ingrese una nueva contraseña: ".encode())
             nueva_contrasena = client_socket.recv(1024).decode().strip()
             
             usuario_existente = session.query(Usuario).filter_by(username=nuevo_usuario_nombre).first()
@@ -191,7 +191,7 @@ class Servidor:
                 verificado = True
 
            while True:
-                menu = ("1. Jugar\n""2. Ver estadísticas\n""3. Salir\n""Elija una opción: ")
+                menu = ("*1. Jugar\n*2. Ver estadísticas\n*3. Salir\nElija una opción: ")
                 client_socket.sendall(menu.encode())
                 opcion = client_socket.recv(1024).decode().strip()
 
@@ -228,7 +228,7 @@ class Servidor:
                                             client_socket.sendall(error.encode())
                                         evento.clear()
                                     else:
-                                        mensaje_error = "Entrada inválida. Por favor ingrese un número entre 1 y 8.\n"
+                                        mensaje_error = "*Entrada inválida. Por favor ingrese un número entre 1 y 8.\n"
                                         client_socket.sendall(mensaje_error.encode())
                 
                         elif data == "no turno":
@@ -327,13 +327,17 @@ class Servidor:
 
 if __name__ == '__main__':
    parser = argparse.ArgumentParser(description='Servidor 4 en línea')
-   parser.add_argument('-p', '--port', required=True, type=int, help='Puerto de escucha')
+   parser.add_argument('-H', '--host', type=str, help="Host de escucha", default="::")
+   parser.add_argument('-P', '--port', type=int, help='Puerto de escucha', default=1234)
    args = parser.parse_args()
-
+   
    port = args.port
+   host = args.host
 
-   servidor = Servidor("::", 12345)  
+   servidor = Servidor(host, port)  
    servidor.start_server()
+
+    
 
 
 
