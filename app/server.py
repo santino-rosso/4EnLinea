@@ -104,6 +104,7 @@ class Servidor:
        self.TCP_Port = TCP_Port
        self.socket = None
        self.jugadores_espera = Queue()
+       self.jugadores_online = []
 
 
    def managment_partida(self):
@@ -132,9 +133,12 @@ class Servidor:
             client_socket.sendall("*Ingrese su contraseña: ".encode())
             contrasena = client_socket.recv(1024).decode().strip()
             usuario = session.query(Usuario).filter_by(username=usuario_nombre).first()
-
+            if usuario.username in self.jugadores_online:
+                client_socket.sendall("El usuario ya está en línea. Intente nuevamente.\n".encode())
+                return self.autenticar_jugador(client_socket)
             if usuario and HashPassword.verify_password(usuario.password_hash, contrasena):
                 client_socket.sendall("Inicio de sesión exitoso!\n".encode())
+                self.jugadores_online.append(usuario_nombre)
                 return usuario_nombre
             else:
                 client_socket.sendall("Usuario o contraseña incorrectos.\n".encode())
@@ -163,7 +167,7 @@ class Servidor:
                 finally:
                     session.close()
                 client_socket.sendall("Registro exitoso!\n".encode())
-                return nuevo_usuario_nombre
+                return self.autenticar_jugador(client_socket)
         else:
             client_socket.sendall("Opción no válida. Intente nuevamente.\n".encode())
             return self.autenticar_jugador(client_socket)
@@ -275,6 +279,7 @@ class Servidor:
        except socket.error as e:
            print(f"Error de socket: {e}")
        finally:
+           self.jugadores_online.remove(usuario_nombre)
            client_socket.close()
            print(f"Conexión cerrada con {client_address}")
 
