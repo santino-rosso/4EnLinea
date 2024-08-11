@@ -4,6 +4,7 @@ import socket
 import threading
 import argparse
 from queue import Queue
+import queue
 
 
 
@@ -51,8 +52,20 @@ class MainFourInLine:
                    eventos[x].set()
 
                while True:
-                    evento_partida.wait()
-                    col = int(colas_partida[turno].get())-1
+                    evento_partida.wait(timeout=30)
+                    
+                    try:    
+                        col = colas_partida[turno].get(timeout=0)
+                    except queue.Empty:
+                        colas_partida[1 - turno].put("ganador/empate")
+                        colas_partida[1 - turno].put("-------Ganaste-------\n")
+                        self.board(colas_partida[1 - turno])
+                        eventos[1 - turno].set()
+                        self.running = False
+                        #sockets[turno].close()
+                        break
+
+                    col = int(col)-1
                     evento_partida.clear()
                     try:
                         self.game.insert_token(col)
@@ -133,10 +146,10 @@ class Servidor:
             client_socket.sendall("*Ingrese su contraseña: ".encode())
             contrasena = client_socket.recv(1024).decode().strip()
             usuario = session.query(Usuario).filter_by(username=usuario_nombre).first()
-            if usuario.username in self.jugadores_online:
+            if usuario!=None and usuario.username in self.jugadores_online:
                 client_socket.sendall("El usuario ya está en línea. Intente nuevamente.\n".encode())
                 return self.autenticar_jugador(client_socket)
-            if usuario and HashPassword.verify_password(usuario.password_hash, contrasena):
+            if usuario!=None and HashPassword.verify_password(usuario.password_hash, contrasena):
                 client_socket.sendall("Inicio de sesión exitoso!\n".encode())
                 self.jugadores_online.append(usuario_nombre)
                 return usuario_nombre
@@ -152,7 +165,7 @@ class Servidor:
             
             usuario_existente = session.query(Usuario).filter_by(username=nuevo_usuario_nombre).first()
 
-            if usuario_existente:
+            if usuario_existente!=None:
                 client_socket.sendall("El usuario ya existe. Intente nuevamente.\n".encode())
                 return self.autenticar_jugador(client_socket)
             else:
@@ -176,7 +189,7 @@ class Servidor:
    def mostrar_estadisticas(self, client_socket, usuario_nombre):
     session = Session()
     usuario = session.query(Usuario).filter_by(username=usuario_nombre).first()
-    if usuario:
+    if usuario!=None:
         stats = (f"Estadísticas de {usuario_nombre}:\n"f"Partidas ganadas: {usuario.partidas_ganadas}\n"f"Partidas perdidas: {usuario.partidas_perdidas}\n"f"Partidas empatadas: {usuario.partidas_empatadas}\n")
         client_socket.sendall(stats.encode())
     else:
@@ -279,7 +292,8 @@ class Servidor:
        except socket.error as e:
            print(f"Error de socket: {e}")
        finally:
-           self.jugadores_online.remove(usuario_nombre)
+           if usuario_nombre in self.jugadores_online:
+               self.jugadores_online.remove(usuario_nombre)
            client_socket.close()
            print(f"Conexión cerrada con {client_address}")
 
@@ -288,6 +302,10 @@ class Servidor:
        self.socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
 
        try:
+           self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+           self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+
            # Desactivar IPV6_V6ONLY
            self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
 

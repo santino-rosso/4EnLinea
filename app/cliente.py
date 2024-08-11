@@ -3,6 +3,7 @@ import threading
 import sys
 import termios
 import argparse
+import selectors
 
 
 class Cliente:
@@ -18,7 +19,6 @@ class Cliente:
         if not addr_info:
             raise ValueError("No se pudo obtener información de direcciones.")
 
-        # Seleccionar la primera dirección compatible
         addr = addr_info[0][-1]
 
         self.socket = socket.socket(addr_info[0][0], socket.SOCK_STREAM)
@@ -40,8 +40,27 @@ class Cliente:
         termios.tcflush(sys.stdin, termios.TCIFLUSH)
 
     def send_messages(self):
-        message = input("")
-        self.socket.sendall(message.encode())
+        selector = selectors.DefaultSelector()
+        selector.register(sys.stdin, selectors.EVENT_READ)
+        
+        while True:
+            events = selector.select(timeout=50)
+            if events:
+                for key, _ in events:
+                    if key.fileobj is sys.stdin:
+                        message = sys.stdin.readline().strip()
+                        if message:
+                            self.socket.sendall(message.encode())
+                            return
+                        else:
+                            print("No se puede enviar mensajes vacíos")
+
+            else:
+                print("\nHas sido desconectado")
+                self.running = False
+                break
+
+        selector.unregister(sys.stdin)
 
     def jugar(self):
         receive_msg_thread = threading.Thread(target=self.receive_messages, args=())
