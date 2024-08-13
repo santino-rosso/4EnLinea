@@ -1,5 +1,4 @@
 import socket
-import threading
 import sys
 import termios
 import argparse
@@ -23,6 +22,7 @@ class Cliente:
 
         self.socket = socket.socket(addr_info[0][0], socket.SOCK_STREAM)
         self.socket.connect(addr)
+
         print("Conectado al servidor")
 
     def receive_messages(self):
@@ -62,18 +62,16 @@ class Cliente:
 
         selector.unregister(sys.stdin)
 
-    def jugar(self):
-        receive_msg_thread = threading.Thread(target=self.receive_messages, args=())
-                
-        receive_msg_thread.start()
-                
-        receive_msg_thread.join() 
-
     def cerrar(self):
-         if self.socket:
-               self.socket.close()
+        if self.socket:
+            self.socket.close()
+    
+    def jugar(self):
+        self.conectar()
+        self.receive_messages()
+        self.cerrar()
 
-
+    
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Cliente 4 en línea')
     parser.add_argument('-H','--host', type=str, help="Host a conectarse", default="localhost")
@@ -85,7 +83,5 @@ if __name__ == "__main__":
     host = args.host
 
     cliente = Cliente(host, port)
-    cliente.conectar()
     cliente.jugar()
-    cliente.cerrar()
 

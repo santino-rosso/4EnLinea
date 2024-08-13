@@ -2,8 +2,7 @@ class FullColumn(Exception):
     pass
 
 
-class CuatroInLine:
-
+class FourInLine:
     def __init__(self):
         self.board=[[" " for column in range(8)] for row in range(8)]
         self.turn = "0"
