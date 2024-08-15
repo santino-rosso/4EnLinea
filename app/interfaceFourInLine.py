@@ -115,4 +115,3 @@ class MainFourInLine:
         self.board(colas_partida[1 - turno])
         eventos[1 - turno].set()
         self.running = False
-        #sockets[turno].close()

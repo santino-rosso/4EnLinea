@@ -61,16 +61,10 @@ class Cliente:
                 break
 
         selector.unregister(sys.stdin)
-
-    def cerrar(self):
-        if self.socket:
-            self.socket.close()
     
     def jugar(self):
         self.conectar()
         self.receive_messages()
-        self.cerrar()
-
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Cliente 4 en línea')
