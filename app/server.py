@@ -5,17 +5,26 @@ import socket
 import threading
 import argparse
 from queue import Queue
+from multiprocessing import Process, Pipe
+from registroConexiones import generador_reportes
+import signal, sys
+
 
 class Servidor:
-    def __init__(self, TCP_IP, TCP_Port):
+    def __init__(self, TCP_IP, TCP_Port, parent_conn):
         self.TCP_IP = TCP_IP
         self.TCP_Port = TCP_Port
         self.socket = None
         self.jugadores_espera = Queue()
         self.jugadores_online = []
+        self.parent_conn = parent_conn
+        self.lock = threading.Lock()
+        self.shutdown_event = threading.Event()
+
+
 
     def managment_games(self):
-        while True:
+        while not self.shutdown_event.is_set():
             if self.jugadores_espera.qsize() >= 2:
                 partida = MainFourInLine()
                 evento_partida = threading.Event()
@@ -38,6 +47,8 @@ class Servidor:
 
             if verificado == False:
                 usuario_nombre, self.jugadores_online = autenticar_jugador(client_socket, self.jugadores_online)
+                with self.lock:
+                    self.parent_conn.send(f"{usuario_nombre} se ha conectado.")
                 verificado = True
 
             while True:
@@ -159,11 +170,16 @@ class Servidor:
         except ValueError as ve:
             print(f"Error: {ve}")
         finally:
+            self.shutdown_event.set()
+            with self.lock:
+                self.parent_conn.send("FIN")
             if self.socket:
                 self.socket.close()
 
 
-
+    def signal_handler(self,sig, frame):
+        print("Señal de terminación recibida. Cerrando el servidor...")
+        self.socket.close()
 
 
 if __name__ == '__main__':
@@ -175,8 +191,20 @@ if __name__ == '__main__':
     port = args.port
     host = args.host
 
-    servidor = Servidor(host, port)  
+    parent_conn, child_conn = Pipe()
+
+    registro = Process(target=generador_reportes, args=(child_conn,))
+    registro.start()
+
+    servidor = Servidor(host, port, parent_conn)
+
+    signal.signal(signal.SIGINT, servidor.signal_handler)
+    signal.signal(signal.SIGTERM, servidor.signal_handler)
+
     servidor.start_server()
+
+    registro.join()
+
 
 
 
