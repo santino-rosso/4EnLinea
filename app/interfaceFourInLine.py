@@ -22,7 +22,9 @@ class MainFourInLine:
         cola_partida.put(board_message)
 
 
-    def run(self, colas_partida, eventos, evento_partida):
+    def run(self, colas_partida, eventos, evento_partida, nombres, lock, parent_conn):
+        with lock:
+            parent_conn.send("Partida iniciada entre " + nombres[0] + " y " + nombres[1] + ".")
         for x in range(2):
             colas_partida[x].put(evento_partida)
             
@@ -41,6 +43,9 @@ class MainFourInLine:
 
             if self.game.empate():
                 self.show_empate(colas_partida,eventos,turno)
+        
+        with lock:
+            parent_conn.send("Partida finalizada entre " + nombres[0] + " y " + nombres[1] + ".")
 
     def show_winner(self,colas_partida,eventos,turno):
         self.game.change_turn()

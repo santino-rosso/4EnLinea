@@ -6,8 +6,8 @@ import threading
 import argparse
 from queue import Queue
 from multiprocessing import Process, Pipe
-from registroConexiones import generador_reportes
-import signal, sys
+from log import generador_registros
+import signal
 
 
 class Servidor:
@@ -30,14 +30,17 @@ class Servidor:
                 evento_partida = threading.Event()
                 colas_partida = []
                 eventos = []
+                nombres = []
                 
                 for x in range(2):
                     jugador = self.jugadores_espera.get()
                     colas_partida.append(jugador[0])
                     eventos.append(jugador[1])
+                    nombres.append(jugador[2])  
 
-                partida_thread = threading.Thread(target=partida.run, args=(colas_partida, eventos, evento_partida))
+                partida_thread = threading.Thread(target=partida.run, args=(colas_partida, eventos, evento_partida,nombres,self.lock,self.parent_conn))
                 partida_thread.start()
+
 
     def managment_client(self, client_socket, client_address, evento, cola_partida, verificado, usuario_nombre):
         print(f"Conexión aceptada de {client_address}")
@@ -64,6 +67,8 @@ class Servidor:
 
                 elif opcion == "3":
                     client_socket.sendall("Desconectando...\n".encode())
+                    with self.lock:
+                        self.parent_conn.send(f"{usuario_nombre} se ha desconectado.")
                     break
 
                 else:
@@ -78,7 +83,7 @@ class Servidor:
             print(f"Conexión cerrada con {client_address}")
 
     def handle_game_session(self, client_socket, evento, cola_partida, usuario_nombre): 
-        datos = [cola_partida, evento]
+        datos = [cola_partida, evento, usuario_nombre]
         self.jugadores_espera.put(datos)
         mensaje = "Esperando otro jugador...\n"
         client_socket.sendall(mensaje.encode())
@@ -193,7 +198,7 @@ if __name__ == '__main__':
 
     parent_conn, child_conn = Pipe()
 
-    registro = Process(target=generador_reportes, args=(child_conn,))
+    registro = Process(target=generador_registros, args=(child_conn,))
     registro.start()
 
     servidor = Servidor(host, port, parent_conn)
