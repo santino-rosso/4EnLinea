@@ -11,10 +11,9 @@ import signal
 
 
 class Servidor:
-    def __init__(self, TCP_IP, TCP_Port, parent_conn):
-        self.TCP_IP = TCP_IP
+    def __init__(self, TCP_Port, parent_conn):
         self.TCP_Port = TCP_Port
-        self.socket = None
+        self.sockets = []
         self.jugadores_espera = Queue()
         self.jugadores_online = []
         self.parent_conn = parent_conn
@@ -133,75 +132,77 @@ class Servidor:
                 jugando = False
 
     def start_server(self):
-        self.socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        ipv4_thread = threading.Thread(target=self.create_and_run_socket, args=(socket.AF_INET,))
+        ipv6_thread = threading.Thread(target=self.create_and_run_socket, args=(socket.AF_INET6,))
+        administracion_partidas_thread = threading.Thread(target=self.managment_games)
+        
+        ipv4_thread.start()
+        ipv6_thread.start()
+        administracion_partidas_thread.start()
 
+        ipv4_thread.join()
+        ipv6_thread.join()
+    
+    def create_and_run_socket(self, family):
         try:
-            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            addr_info = socket.getaddrinfo(None, self.TCP_Port, family, socket.SOCK_STREAM, 0, socket.AI_PASSIVE)
+            for addr in addr_info:
+                family, socktype, proto, canonname, sockaddr = addr
+                try:
+                    server_socket = socket.socket(family, socktype, proto)
+                    self.sockets.append(server_socket)
+                    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    if family == socket.AF_INET6:
+                        ip_version = "IPv6"
+                        server_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+                    else:    
+                        ip_version = "IPv4"
+                    server_socket.bind(sockaddr)
+                    server_socket.listen(7)
+        
+                    ip, port = sockaddr[:2]
+                    print(f"Servidor escuchando en {ip_version} {ip}:{port}")
+                except socket.error as e:
+                    print(f"Error al iniciar el socket {ip_version} en {ip}:{port}. {e}")
+                    continue
+                    
+                server_socket.settimeout(1.0)
+                while not self.shutdown_event.is_set():
+                    try:
+                        client_socket, client_address = server_socket.accept()
+                        print(f"Conexión aceptada de {client_address}")
 
-            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+                        evento = threading.Event()
+                        cola_partida = Queue()
+                        verificado = False
 
-            # Desactivar IPV6_V6ONLY
-            self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
-
-            # Obtener información de direcciones
-            addr_info = socket.getaddrinfo(self.TCP_IP, self.TCP_Port, socket.AF_INET6, socket.IPPROTO_TCP)
-
-            if not addr_info:
-                raise ValueError("No se pudo obtener información de direcciones.")
-
-            # Seleccionar la primera dirección
-            addr = addr_info[0][-1]
-
-            self.socket.bind(addr)
-            self.socket.listen(5)
-
-            print(f"Servidor iniciado en {addr}")
-
-            administracion_partidas_thread = threading.Thread(target=self.managment_games)
-            administracion_partidas_thread.start()
-
-            while True:
-                client_socket, client_address = self.socket.accept()
-
-                evento = threading.Event()
-                cola_partida = Queue()
-                verificado = False
-
-                client_thread = threading.Thread(target=self.managment_client, args=(client_socket, client_address, evento, cola_partida, verificado,None))
-                client_thread.start()
+                        client_thread = threading.Thread(target=self.managment_client, args=(client_socket, client_address, evento, cola_partida, verificado, None))
+                        client_thread.start()
+                    except socket.timeout:
+                        continue
+                server_socket.close()
 
         except socket.error as e:
-            print(f"Error al enlazar el socket: {e}")
-        except ValueError as ve:
-            print(f"Error: {ve}")
-        finally:
-            self.shutdown_event.set()
-            with self.lock:
-                self.parent_conn.send("FIN")
-            if self.socket:
-                self.socket.close()
+            print(f"Error al iniciar el servidor: {e}")
 
 
     def signal_handler(self,sig, frame):
         print("Señal de terminación recibida. Cerrando el servidor...")
-        self.socket.close()
-
+        self.shutdown_event.set()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Servidor 4 en línea')
-    parser.add_argument('-H', '--host', type=str, help="Host de escucha", default="::")
-    parser.add_argument('-P', '--port', type=int, help='Puerto de escucha', default=1234)
+    parser.add_argument('-P', '--port', type=int, help='Puerto de escucha', default=1231)
     args = parser.parse_args()
     
     port = args.port
-    host = args.host
 
     parent_conn, child_conn = Pipe()
 
     registro = Process(target=generador_registros, args=(child_conn,))
     registro.start()
 
-    servidor = Servidor(host, port, parent_conn)
+    servidor = Servidor(port, parent_conn)
 
     signal.signal(signal.SIGINT, servidor.signal_handler)
     signal.signal(signal.SIGTERM, servidor.signal_handler)
