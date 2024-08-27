@@ -72,7 +72,9 @@ class Servidor:
 
                 else:
                     client_socket.sendall("Opción no válida. Intente nuevamente.\n".encode())
-
+        
+        except BrokenPipeError:
+                print(f"Error de comunicación con el cliente {client_address}.")
         except socket.error as e:
             print(f"Error de socket: {e}")
         finally:
@@ -142,6 +144,7 @@ class Servidor:
 
         ipv4_thread.join()
         ipv6_thread.join()
+        administracion_partidas_thread.join()
     
     def create_and_run_socket(self, family):
         try:
@@ -162,25 +165,26 @@ class Servidor:
         
                     ip, port = sockaddr[:2]
                     print(f"Servidor escuchando en {ip_version} {ip}:{port}")
+                    break
+
                 except socket.error as e:
                     print(f"Error al iniciar el socket {ip_version} en {ip}:{port}. {e}")
                     continue
                     
-                server_socket.settimeout(1.0)
-                while not self.shutdown_event.is_set():
-                    try:
-                        client_socket, client_address = server_socket.accept()
-                        print(f"Conexión aceptada de {client_address}")
+            server_socket.settimeout(1.0)
+            while not self.shutdown_event.is_set():
+                try:
+                    client_socket, client_address = server_socket.accept()
 
-                        evento = threading.Event()
-                        cola_partida = Queue()
-                        verificado = False
+                    evento = threading.Event()
+                    cola_partida = Queue()
+                    verificado = False
 
-                        client_thread = threading.Thread(target=self.managment_client, args=(client_socket, client_address, evento, cola_partida, verificado, None))
-                        client_thread.start()
-                    except socket.timeout:
-                        continue
-                server_socket.close()
+                    client_thread = threading.Thread(target=self.managment_client, args=(client_socket, client_address, evento, cola_partida, verificado, None))
+                    client_thread.start()
+                except socket.timeout:
+                    continue
+            server_socket.close()
 
         except socket.error as e:
             print(f"Error al iniciar el servidor: {e}")
