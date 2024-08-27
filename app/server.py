@@ -196,7 +196,7 @@ class Servidor:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Servidor 4 en línea')
-    parser.add_argument('-P', '--port', type=int, help='Puerto de escucha', default=1231)
+    parser.add_argument('-P', '--port', type=int, help='Puerto de escucha', default=1234)
     args = parser.parse_args()
     
     port = args.port
