@@ -13,7 +13,6 @@ import signal
 class Servidor:
     def __init__(self, TCP_Port, parent_conn):
         self.TCP_Port = TCP_Port
-        self.sockets = []
         self.jugadores_espera = Queue()
         self.jugadores_online = []
         self.parent_conn = parent_conn
@@ -153,11 +152,9 @@ class Servidor:
                 family, socktype, proto, canonname, sockaddr = addr
                 try:
                     server_socket = socket.socket(family, socktype, proto)
-                    self.sockets.append(server_socket)
-                    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
                     if family == socket.AF_INET6:
                         ip_version = "IPv6"
-                        server_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
                     else:    
                         ip_version = "IPv4"
                     server_socket.bind(sockaddr)
@@ -168,7 +165,7 @@ class Servidor:
                     break
 
                 except socket.error as e:
-                    print(f"Error al iniciar el socket {ip_version} en {ip}:{port}. {e}")
+                    print(f"Error al iniciar el socket {ip_version}. {e}")
                     continue
                     
             server_socket.settimeout(1.0)
