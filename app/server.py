@@ -38,7 +38,10 @@ class Servidor:
 
                 partida_thread = threading.Thread(target=partida.run, args=(colas_partida, eventos, evento_partida,nombres,self.lock,self.parent_conn))
                 partida_thread.start()
-
+        if self.shutdown_event.is_set():
+            for x in range(self.jugadores_espera.qsize()):
+                jugador = self.jugadores_espera.get()
+                jugador[0].put("Terminar")
 
     def managment_client(self, client_socket, client_address, evento, cola_partida, verificado, usuario_nombre):
         print(f"Conexión aceptada de {client_address}")
@@ -47,7 +50,7 @@ class Servidor:
             mensaje = "Bienvenido al 4 en línea\n"
             client_socket.sendall(mensaje.encode())
 
-            if verificado == False:
+            if verificado == False and not self.shutdown_event.is_set():
                 usuario_nombre, self.jugadores_online = autenticar_jugador(client_socket, self.jugadores_online)
                 if usuario_nombre == None:
                     conectado = False
@@ -56,7 +59,7 @@ class Servidor:
                         self.parent_conn.send(f"{usuario_nombre} se ha conectado.")
                     verificado = True
 
-            while conectado:
+            while conectado and not self.shutdown_event.is_set():
                 menu = ("*1. Jugar\n*2. Ver estadísticas\n*3. Salir\nElija una opción: ")
                 client_socket.sendall(menu.encode())
                 opcion = client_socket.recv(1024).decode().strip()
@@ -75,7 +78,10 @@ class Servidor:
 
                 else:
                     client_socket.sendall("Opción no válida. Intente nuevamente.\n".encode())
-        
+
+            if self.shutdown_event.is_set():
+                client_socket.sendall("El servidor se ha cerrado.\n".encode())
+
         except BrokenPipeError:
                 print(f"Error de comunicación con el cliente {client_address}.")
         except socket.error as e:
@@ -91,8 +97,12 @@ class Servidor:
         self.jugadores_espera.put(datos)
         mensaje = "Esperando otro jugador...\n"
         client_socket.sendall(mensaje.encode())
-        evento_partida = cola_partida.get()
         jugando = True
+        evento_partida = cola_partida.get()
+        if evento_partida == "Terminar":
+            mensaje = "Cancelando...\n"
+            client_socket.sendall(mensaje.encode())
+            jugando = False
         while jugando:
             evento.wait()
                         
