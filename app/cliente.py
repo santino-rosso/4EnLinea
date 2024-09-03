@@ -13,54 +13,68 @@ class Cliente:
         self.running = True
 
     def conectar(self):
-        addr_info = socket.getaddrinfo(self.TCP_IP, self.TCP_Port, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        try:
+            addr_info = socket.getaddrinfo(self.TCP_IP, self.TCP_Port, socket.AF_UNSPEC, socket.SOCK_STREAM)
 
-        if not addr_info:
-            raise ValueError("No se pudo obtener información de direcciones.")
+            if not addr_info:
+                raise ValueError("No se pudo obtener información de direcciones.")
 
-        addr = addr_info[0][-1]
+            addr = addr_info[0][-1]
 
-        self.socket = socket.socket(addr_info[0][0], socket.SOCK_STREAM)
-        self.socket.connect(addr)
+            self.socket = socket.socket(addr_info[0][0], socket.SOCK_STREAM)
+            self.socket.connect(addr)
 
-        print("Conectado al servidor")
+        except (socket.error, ValueError) as e:
+            print(f"Error de conexión: {e}")
+            self.running = False
 
     def receive_messages(self):
-        while self.running:
-            message = self.socket.recv(1024).decode()
-            print(message)
-            if message == "":
-                self.running = False
-                break
-            elif "*" in message:
-                self.clear_input_buffer()
-                self.send_messages()
+        try:
+            while self.running:
+                message = self.socket.recv(1024).decode()
+                print(message)
+                if message == "":
+                    self.running = False
+                    break
+                elif "*" in message:
+                    self.clear_input_buffer()
+                    self.send_messages()
+        except (ConnectionResetError, BrokenPipeError) as e:
+            print(f"Error en la recepción de mensajes: {e}")
+            self.running = False     
 
     def clear_input_buffer(self):
-        termios.tcflush(sys.stdin, termios.TCIFLUSH)
+        try:
+            termios.tcflush(sys.stdin, termios.TCIFLUSH)
+        except OSError as e:
+            print(f"Error al limpiar el buffer de entrada: {e}")
 
     def send_messages(self):
         selector = selectors.DefaultSelector()
         selector.register(sys.stdin, selectors.EVENT_READ)
         
         while True:
-            events = selector.select(timeout=50)
-            if events:
-                for key, _ in events:
-                    if key.fileobj is sys.stdin:
-                        message = sys.stdin.readline().strip()
-                        if message:
-                            self.socket.sendall(message.encode())
-                            return
-                        else:
-                            print("No se puede enviar mensajes vacíos")
-
-            else:
-                print("\nHas sido desconectado")
+            try:
+                events = selector.select(timeout=50)
+                if events:
+                    for key, _ in events:
+                        if key.fileobj is sys.stdin:
+                            message = sys.stdin.readline().strip()
+                            if message:
+                                self.socket.sendall(message.encode())
+                                return
+                            else:
+                                print("No se puede enviar mensajes vacíos")
+                else:
+                    print("\nHas sido desconectado")
+                    self.running = False
+                    break
+            except (ConnectionResetError, BrokenPipeError) as e:
+                print(f"Error al enviar el mensaje: {e}")
                 self.running = False
                 break
-
-        selector.unregister(sys.stdin)
+            finally:
+                selector.unregister(sys.stdin)
     
     def jugar(self):
         self.conectar()

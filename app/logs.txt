@@ -12,3 +12,17 @@
 [2024-08-23] - [12:01:33] - Partida finalizada entre santino y lio.
 [2024-08-23] - [12:01:34] - lio se ha desconectado.
 [2024-08-23] - [12:01:36] - santino se ha desconectado.
+[2024-09-03] - [10:08:11] - santino se ha conectado.
+[2024-09-03] - [10:08:54] - lio se ha conectado.
+[2024-09-03] - [10:08:55] - Partida iniciada entre santino y lio.
+[2024-09-03] - [10:09:05] - Partida finalizada entre santino y lio.
+[2024-09-03] - [10:09:09] - lio se ha desconectado.
+[2024-09-03] - [10:09:11] - santino se ha desconectado.
+[2024-09-03] - [10:09:54] - santino se ha conectado.
+[2024-09-03] - [10:09:55] - santino se ha desconectado.
+[2024-09-03] - [18:09:39] - santino se ha conectado.
+[2024-09-03] - [18:09:57] - santino se ha desconectado.
+[2024-09-03] - [18:22:33] - santino se ha conectado.
+[2024-09-03] - [18:22:35] - santino se ha desconectado.
+[2024-09-03] - [18:25:32] - raul se ha conectado.
+[2024-09-03] - [18:25:34] - raul se ha desconectado.

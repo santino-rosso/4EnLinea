@@ -43,16 +43,20 @@ class Servidor:
     def managment_client(self, client_socket, client_address, evento, cola_partida, verificado, usuario_nombre):
         print(f"Conexión aceptada de {client_address}")
         try:
+            conectado = True
             mensaje = "Bienvenido al 4 en línea\n"
             client_socket.sendall(mensaje.encode())
 
             if verificado == False:
                 usuario_nombre, self.jugadores_online = autenticar_jugador(client_socket, self.jugadores_online)
-                with self.lock:
-                    self.parent_conn.send(f"{usuario_nombre} se ha conectado.")
-                verificado = True
+                if usuario_nombre == None:
+                    conectado = False
+                else:
+                    with self.lock:
+                        self.parent_conn.send(f"{usuario_nombre} se ha conectado.")
+                    verificado = True
 
-            while True:
+            while conectado:
                 menu = ("*1. Jugar\n*2. Ver estadísticas\n*3. Salir\nElija una opción: ")
                 client_socket.sendall(menu.encode())
                 opcion = client_socket.recv(1024).decode().strip()
@@ -67,7 +71,7 @@ class Servidor:
                     client_socket.sendall("Desconectando...\n".encode())
                     with self.lock:
                         self.parent_conn.send(f"{usuario_nombre} se ha desconectado.")
-                    break
+                    conectado = False
 
                 else:
                     client_socket.sendall("Opción no válida. Intente nuevamente.\n".encode())
@@ -133,40 +137,44 @@ class Servidor:
                 jugando = False
 
     def start_server(self):
-        ipv4_thread = threading.Thread(target=self.create_and_run_socket, args=(socket.AF_INET,))
-        ipv6_thread = threading.Thread(target=self.create_and_run_socket, args=(socket.AF_INET6,))
+        hilos = []
+        addr_info = socket.getaddrinfo(None, self.TCP_Port, socket.AF_UNSPEC, socket.SOCK_STREAM, 0, socket.AI_PASSIVE)
+        for addr in addr_info:
+            addr_family = addr[0]
+            if addr_family == socket.AF_INET:
+                ipv4_thread = threading.Thread(target=self.create_and_run_socket, args=(addr,))
+                ipv4_thread.start()
+                hilos.append(ipv4_thread)
+            elif addr_family == socket.AF_INET6:
+                ipv6_thread = threading.Thread(target=self.create_and_run_socket, args=(addr,))
+                ipv6_thread.start()
+                hilos.append(ipv6_thread)
+
         administracion_partidas_thread = threading.Thread(target=self.managment_games)
-        
-        ipv4_thread.start()
-        ipv6_thread.start()
         administracion_partidas_thread.start()
+        hilos.append(administracion_partidas_thread)
 
-        ipv4_thread.join()
-        ipv6_thread.join()
-        administracion_partidas_thread.join()
+        for hilo in hilos:
+            hilo.join()
     
-    def create_and_run_socket(self, family):
+    def create_and_run_socket(self, addr):
         try:
-            addr_info = socket.getaddrinfo(None, self.TCP_Port, family, socket.SOCK_STREAM, 0, socket.AI_PASSIVE)
-            for addr in addr_info:
-                family, socktype, proto, canonname, sockaddr = addr
-                try:
-                    server_socket = socket.socket(family, socktype, proto)
-                    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-                    if family == socket.AF_INET6:
-                        ip_version = "IPv6"
-                    else:    
-                        ip_version = "IPv4"
-                    server_socket.bind(sockaddr)
-                    server_socket.listen(7)
+            family, socktype, proto, canonname, sockaddr = addr
+            try:
+                server_socket = socket.socket(family, socktype, proto)
+                server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+                if family == socket.AF_INET6:
+                    ip_version = "IPv6"
+                else:    
+                    ip_version = "IPv4"
+                server_socket.bind(sockaddr)
+                server_socket.listen(7)
         
-                    ip, port = sockaddr[:2]
-                    print(f"Servidor escuchando en {ip_version} {ip}:{port}")
-                    break
+                ip, port = sockaddr[:2]
+                print(f"Servidor escuchando en {ip_version} {ip}:{port}")
 
-                except socket.error as e:
-                    print(f"Error al iniciar el socket {ip_version}. {e}")
-                    continue
+            except socket.error as e:
+                print(f"Error al iniciar el socket {ip_version}. {e}")
                     
             server_socket.settimeout(1.0)
             while not self.shutdown_event.is_set():
