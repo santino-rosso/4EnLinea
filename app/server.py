@@ -7,7 +7,6 @@ import argparse
 from queue import Queue
 from multiprocessing import Process, Pipe
 from log import generador_registros
-import signal
 
 
 class Servidor:
@@ -147,25 +146,29 @@ class Servidor:
                 jugando = False
 
     def start_server(self):
-        hilos = []
-        addr_info = socket.getaddrinfo(None, self.TCP_Port, socket.AF_UNSPEC, socket.SOCK_STREAM, 0, socket.AI_PASSIVE)
-        for addr in addr_info:
-            addr_family = addr[0]
-            if addr_family == socket.AF_INET:
-                ipv4_thread = threading.Thread(target=self.create_and_run_socket, args=(addr,))
-                ipv4_thread.start()
-                hilos.append(ipv4_thread)
-            elif addr_family == socket.AF_INET6:
-                ipv6_thread = threading.Thread(target=self.create_and_run_socket, args=(addr,))
-                ipv6_thread.start()
-                hilos.append(ipv6_thread)
+        try:
+            hilos = []
+            addr_info = socket.getaddrinfo(None, self.TCP_Port, socket.AF_UNSPEC, socket.SOCK_STREAM, 0, socket.AI_PASSIVE)
+            for addr in addr_info:
+                addr_family = addr[0]
+                if addr_family == socket.AF_INET:
+                    ipv4_thread = threading.Thread(target=self.create_and_run_socket, args=(addr,))
+                    ipv4_thread.start()
+                    hilos.append(ipv4_thread)
+                elif addr_family == socket.AF_INET6:
+                    ipv6_thread = threading.Thread(target=self.create_and_run_socket, args=(addr,))
+                    ipv6_thread.start()
+                    hilos.append(ipv6_thread)
 
-        administracion_partidas_thread = threading.Thread(target=self.managment_games)
-        administracion_partidas_thread.start()
-        hilos.append(administracion_partidas_thread)
+            administracion_partidas_thread = threading.Thread(target=self.managment_games)
+            administracion_partidas_thread.start()
+            hilos.append(administracion_partidas_thread)
 
-        for hilo in hilos:
-            hilo.join()
+            for hilo in hilos:
+                hilo.join()
+        except KeyboardInterrupt:
+            print("Señal de terminación recibida. Cerrando el servidor...")
+            self.shutdown_event.set()
     
     def create_and_run_socket(self, addr):
         try:
@@ -205,10 +208,6 @@ class Servidor:
             print(f"Error al iniciar el servidor: {e}")
 
 
-    def signal_handler(self,sig, frame):
-        print("Señal de terminación recibida. Cerrando el servidor...")
-        self.shutdown_event.set()
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Servidor 4 en línea')
     parser.add_argument('-P', '--port', type=int, help='Puerto de escucha', default=1234)
@@ -222,9 +221,6 @@ if __name__ == '__main__':
     registro.start()
 
     servidor = Servidor(port, parent_conn)
-
-    signal.signal(signal.SIGINT, servidor.signal_handler)
-    signal.signal(signal.SIGTERM, servidor.signal_handler)
 
     servidor.start_server()
 
