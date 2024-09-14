@@ -7,6 +7,7 @@ import argparse
 from queue import Queue
 from multiprocessing import Process, Queue
 from log import generador_registros
+import time
 
 
 class Servidor:
@@ -166,6 +167,10 @@ class Servidor:
         except KeyboardInterrupt:
             print("Señal de terminación recibida. Cerrando el servidor...")
             self.shutdown_event.set()
+            while len(self.jugadores_online) > 0:
+                print(f"Esperando... Clientes activos: {len(self.jugadores_online)}")
+                time.sleep(30)
+            self.cola_registros.put("terminar")
     
     def create_and_run_socket(self, addr):
         try:
@@ -222,6 +227,8 @@ if __name__ == '__main__':
     servidor.start_server()
 
     registro.join()
+    
+    print("Servidor cerrado.")
 
 
 
