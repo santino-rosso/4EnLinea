@@ -11,6 +11,9 @@
 --Manejo de Partidas: Controla la lógica del juego y sincroniza el estado en tiempo real, enviando actualizaciones a los clientes.
 --Consultas SQL: Realiza consultas SQL para recuperar y actualizar datos según sea necesario.
 --Manejo de Errores: Captura excepciones como jugadas fuera del tablero, columnas llenas y errores de conexión, informando a los jugadores a través de mensajes.
+--Soporte para IPv4 e IPv6: El servidor permite conexiones desde clientes usando ambas versiones del protocolo de Internet.
+--Registro de Eventos: Utiliza un proceso separado para registrar eventos importantes como conexiones e inicio y finalicacion de partidas.
+--Timeout de Clientes: Implementa un mecanismo para desconetar a los clientes inactivos.
 
 ***Base de Datos
 *Funcionalidades:
