@@ -26,3 +26,5 @@
 [2024-09-03] - [18:22:35] - santino se ha desconectado.
 [2024-09-03] - [18:25:32] - raul se ha conectado.
 [2024-09-03] - [18:25:34] - raul se ha desconectado.
+[2024-09-14] - [19:54:14] - santino se ha conectado.
+[2024-09-14] - [19:54:21] - santino se ha desconectado.

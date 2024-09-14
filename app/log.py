@@ -1,10 +1,10 @@
 from datetime import datetime
 
-def generador_registros(child_conn):
+def generador_registros(cola):
     try:
         with open(f"logs.txt", "a") as file:
             while True:
-                mensaje = child_conn.recv()
+                mensaje = cola.get()
                 hora = datetime.now().strftime("%H:%M:%S")
                 fecha = datetime.now().strftime("%Y-%m-%d")
                 file.write(f"[{fecha}] - [{hora}] - {mensaje}\n")
@@ -13,6 +13,5 @@ def generador_registros(child_conn):
     except KeyboardInterrupt:
         print("Proceso de registros interrumpido.")
     finally:
-        child_conn.close()
         print("Proceso de registros finalizado.")
 

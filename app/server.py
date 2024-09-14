@@ -5,17 +5,16 @@ import socket
 import threading
 import argparse
 from queue import Queue
-from multiprocessing import Process, Pipe
+from multiprocessing import Process, Queue
 from log import generador_registros
 
 
 class Servidor:
-    def __init__(self, TCP_Port, parent_conn):
+    def __init__(self, TCP_Port, cola_registros):
         self.TCP_Port = TCP_Port
         self.jugadores_espera = Queue()
         self.jugadores_online = []
-        self.parent_conn = parent_conn
-        self.lock = threading.Lock()
+        self.cola_registros = cola_registros
         self.shutdown_event = threading.Event()
 
 
@@ -35,7 +34,7 @@ class Servidor:
                     eventos.append(jugador[1])
                     nombres.append(jugador[2])  
 
-                partida_thread = threading.Thread(target=partida.run, args=(colas_partida, eventos, evento_partida,nombres,self.lock,self.parent_conn))
+                partida_thread = threading.Thread(target=partida.run, args=(colas_partida, eventos, evento_partida,nombres, self.cola_registros))
                 partida_thread.start()
         if self.shutdown_event.is_set():
             for x in range(self.jugadores_espera.qsize()):
@@ -54,8 +53,7 @@ class Servidor:
                 if usuario_nombre == None:
                     conectado = False
                 else:
-                    with self.lock:
-                        self.parent_conn.send(f"{usuario_nombre} se ha conectado.")
+                    self.cola_registros.put(f"{usuario_nombre} se ha conectado.")
                     verificado = True
 
             while conectado and not self.shutdown_event.is_set():
@@ -71,8 +69,7 @@ class Servidor:
 
                 elif opcion == "3":
                     client_socket.sendall("Desconectando...\n".encode())
-                    with self.lock:
-                        self.parent_conn.send(f"{usuario_nombre} se ha desconectado.")
+                    self.cola_registros.put(f"{usuario_nombre} se ha desconectado.")
                     conectado = False
 
                 else:
@@ -215,12 +212,12 @@ if __name__ == '__main__':
     
     port = args.port
 
-    parent_conn, child_conn = Pipe()
+    cola_registros = Queue()
 
-    registro = Process(target=generador_registros, args=(child_conn,))
+    registro = Process(target=generador_registros, args=(cola_registros,))
     registro.start()
 
-    servidor = Servidor(port, parent_conn)
+    servidor = Servidor(port, cola_registros)
 
     servidor.start_server()
 
