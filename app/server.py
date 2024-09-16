@@ -4,8 +4,8 @@ from interfaceFourInLine import MainFourInLine
 import socket
 import threading
 import argparse
-from queue import Queue
-from multiprocessing import Process, Queue
+from queue import Queue as QueueHilos
+from multiprocessing import Process, Queue as QueueProcesos
 from log import generador_registros
 import time
 
@@ -13,7 +13,7 @@ import time
 class Servidor:
     def __init__(self, TCP_Port, cola_registros):
         self.TCP_Port = TCP_Port
-        self.jugadores_espera = Queue()
+        self.jugadores_espera = QueueHilos()
         self.jugadores_online = []
         self.cola_registros = cola_registros
         self.shutdown_event = threading.Event()
@@ -62,10 +62,10 @@ class Servidor:
                 client_socket.sendall(menu.encode())
                 opcion = client_socket.recv(1024).decode().strip()
 
-                if opcion == "1":
+                if opcion == "1" and not self.shutdown_event.is_set():
                     self.handle_game_session(client_socket, evento, cola_partida, usuario_nombre)
 
-                elif opcion == "2":
+                elif opcion == "2" and not self.shutdown_event.is_set():
                     mostrar_estadisticas(client_socket, usuario_nombre)
 
                 elif opcion == "3":
@@ -73,10 +73,11 @@ class Servidor:
                     self.cola_registros.put(f"{usuario_nombre} se ha desconectado.")
                     conectado = False
 
-                else:
+                elif opcion != "1" and opcion != "2" and opcion != "3":
                     client_socket.sendall("Opción no válida. Intente nuevamente.\n".encode())
 
             if self.shutdown_event.is_set():
+                self.cola_registros.put(f"{usuario_nombre} se ha desconectado.")
                 client_socket.sendall("El servidor se ha cerrado.\n".encode())
 
         except BrokenPipeError:
@@ -173,41 +174,39 @@ class Servidor:
             self.cola_registros.put("terminar")
     
     def create_and_run_socket(self, addr):
+        family, socktype, proto, canonname, sockaddr = addr
         try:
-            family, socktype, proto, canonname, sockaddr = addr
-            try:
-                server_socket = socket.socket(family, socktype, proto)
-                server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-                if family == socket.AF_INET6:
-                    ip_version = "IPv6"
-                else:    
-                    ip_version = "IPv4"
-                server_socket.bind(sockaddr)
-                server_socket.listen(7)
+            server_socket = socket.socket(family, socktype, proto)
+            server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+            if family == socket.AF_INET6:
+                ip_version = "IPv6"
+            else:    
+                ip_version = "IPv4"
+            server_socket.bind(sockaddr)
+            server_socket.listen(7)
         
-                ip, port = sockaddr[:2]
-                print(f"Servidor escuchando en {ip_version} {ip}:{port}")
-
-            except socket.error as e:
-                print(f"Error al iniciar el socket {ip_version}. {e}")
-                    
-            server_socket.settimeout(1.0)
-            while not self.shutdown_event.is_set():
-                try:
-                    client_socket, client_address = server_socket.accept()
-
-                    evento = threading.Event()
-                    cola_partida = Queue()
-                    verificado = False
-
-                    client_thread = threading.Thread(target=self.managment_client, args=(client_socket, client_address, evento, cola_partida, verificado, None))
-                    client_thread.start()
-                except socket.timeout:
-                    continue
-            server_socket.close()
+            ip, port = sockaddr[:2]
+            print(f"Servidor escuchando en {ip_version} {ip}:{port}")
 
         except socket.error as e:
-            print(f"Error al iniciar el servidor: {e}")
+            print(f"Error al iniciar el socket {ip_version}. {e}")
+                    
+        server_socket.settimeout(1.0)
+        while not self.shutdown_event.is_set():
+            try:
+                client_socket, client_address = server_socket.accept()
+
+                evento = threading.Event()
+                cola_partida = QueueHilos()
+                verificado = False
+
+                client_thread = threading.Thread(target=self.managment_client, args=(client_socket, client_address, evento, cola_partida, verificado, None))
+                client_thread.start()
+            except socket.timeout:
+                continue
+            except socket.error as e:
+                print(f"Error al aceptar la conexión de un cliente. {e}")
+        server_socket.close()
 
 
 if __name__ == '__main__':
@@ -217,7 +216,7 @@ if __name__ == '__main__':
     
     port = args.port
 
-    cola_registros = Queue()
+    cola_registros = QueueProcesos()
 
     registro = Process(target=generador_registros, args=(cola_registros,))
     registro.start()

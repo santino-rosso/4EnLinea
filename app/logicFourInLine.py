@@ -18,8 +18,6 @@ class FourInLine:
             raise FullColumn()
         self.row = self.calculate_row(col)
         self.board[self.row][col] = self.turn
-        self.winner()
-        self.empate()
         self.change_turn()
 
     def calculate_row(self,col):

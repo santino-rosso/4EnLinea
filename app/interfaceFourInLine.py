@@ -65,6 +65,8 @@ class MainFourInLine:
         self.running = False
 
     def show_empate(self,colas_partida,eventos,turno):
+        self.game.change_turn()
+
         for x in range(2):
             colas_partida[x].put("ganador/empate")
 
@@ -73,6 +75,8 @@ class MainFourInLine:
 
         for x in range(2):
             self.board(colas_partida[x])
+            if x != turno:
+                eventos[x].set()
 
         self.running = False
 

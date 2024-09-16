@@ -5,8 +5,8 @@ from passwordHash import HashPassword
 def autenticar_jugador(client_socket, jugadores_online):
     client_socket.sendall("*1. Iniciar sesión\n*2. Registrarse\n*3. Desconectarse\nElija una opción: ".encode())
     opcion = client_socket.recv(1024).decode().strip()
-    session = Session()
     if opcion == "1":
+        session = Session()
         client_socket.sendall("*Ingrese su usuario: ".encode())
         usuario_nombre = client_socket.recv(1024).decode().strip()
         client_socket.sendall("*Ingrese su contraseña: ".encode())
@@ -30,6 +30,7 @@ def autenticar_jugador(client_socket, jugadores_online):
             return autenticar_jugador(client_socket, jugadores_online)
 
     elif opcion == "2":
+        session = Session()
         client_socket.sendall("*Ingrese un nuevo usuario: ".encode())
         nuevo_usuario_nombre = client_socket.recv(1024).decode().strip()
         client_socket.sendall("*Ingrese una nueva contraseña: ".encode())
