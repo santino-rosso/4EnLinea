@@ -48,7 +48,7 @@ El sistema está compuesto por tres componentes principales:
 ## Instalación y Uso
 
 ### Requisitos
-- Python 3.x
+- Python
 - SQLAlchemy
 - SQLite
 
@@ -56,7 +56,6 @@ El sistema está compuesto por tres componentes principales:
 1. Clona el repositorio:
    ```bash
    git clone https://github.com/tu_usuario/4-en-linea-multijugador.git
-   cd 4-en-linea-multijugador
    ```
 2. Instala las dependencias:
    ```bash
